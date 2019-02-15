@@ -5,12 +5,13 @@ Library of Cake (https://cakebuild.net/) recipies for CI/CD integration.
 build.cake has the build definition (tools and addins directives, usings, etc), defines an generic struture to use as a script for multiple (if not all) purposes. All relevant needed path should be defined in here, some of them are already defined related to the root of the solution and build paths.
 
 Cake artefacts go to tools folder and build/code analisys/testing/whatever goes to  BuildSolution folder. Follow the structure.
+```
 ./
 ├───BuildSolution
 │   ├───Artifacts
 │   └───TestResults
 └───tools
-
+```
 
 The recipies are under "recipies" folder and should follow to following convention:
 
