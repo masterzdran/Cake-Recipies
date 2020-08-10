@@ -1,0 +1,21 @@
+{
+    "ApplicationName":"",
+    "BackupFolderPath":"",
+    "DeployFolderPath":"",
+    "DeployPackageName":"",
+    "ServerFarmName":"",
+    "MinWarmTimeoutMs":"500",
+    "UpHealthCheckValue":"UP",
+    "DownHealthCheckValue":"DOWN",
+    "BlueHost":{
+        "Site":"http://localhost:9081",
+        "ApplicationPath":"",
+        "HealthCheckFilePath":""
+    },
+    "GreenHost":{
+        "Site":"http://localhost:9082",
+        "ApplicationPath":"",
+        "HealthCheckFilePath":""
+    },
+    "Warmup":[""]
+}
