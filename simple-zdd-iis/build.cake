@@ -1,15 +1,14 @@
 // title           : build.cake/build.ps1
 // description     : This Cake Build script will deploy/rollback IIS Farm applications.
 // author		    : nuno.cancelo@polarising.com
+// date            : 2020/08
 //==============================================================================
-
 
 #addin nuget:?package=Cake.Json&version=5.2.0
 #addin nuget:?package=Newtonsoft.Json&version=12.0.3
 #addin nuget:?package=Microsoft.Web.Administration&version=11.1.0
 #addin nuget:?package=SharpZipLib&version=1.2.0
 #addin nuget:?package=Cake.Compression&version=0.2.4
-
 
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -22,17 +21,12 @@ using System.Threading;
 ///////////////////////////////////////////////////////////////////////////////
 // ARGUMENTS
 ///////////////////////////////////////////////////////////////////////////////
-
 var target = Argument("target", "Default");
 var configurationFile = Argument("configurationFile","./webfarm.json");
-
 WebFarm webFarm = default;
 FilePath deployPackagePath = default;
 WebFarmHost onlineHost = default;
 WebFarmHost offlineHost = default;
-string UP = nameof(UP);
-string DOWN = nameof(DOWN);
-
 
 ///////////////////////////////////////////////////////////////////////////////
 // SETUP / TEARDOWN
@@ -86,6 +80,21 @@ Task("Import-Configuration")
    }
    
    Information($"File {configFile} was loaded successfully.");
+   Information($"----------------------------------------------------------");
+   Information($"ApplicationName: {webFarm.ApplicationName}");
+   Information($"BackupFolderPath: {webFarm.BackupFolderPath}");
+   Information($"DeployFolderPath: {webFarm.DeployFolderPath}");
+   Information($"DeployPackageName: {webFarm.DeployPackageName}");
+   Information($"ServerFarmName: {webFarm.ServerFarmName}");
+   Information($"MinWarmTimeoutMs: {webFarm.MinWarmTimeoutMs}");
+   Information($"UpHealthCheckValue: {webFarm.UpHealthCheckValue}");
+   Information($"DownHealthCheckValue: {webFarm.DownHealthCheckValue}");
+   Information($"ExecuteBackupStep: {webFarm.ExecuteBackupStep}");
+   foreach(var item in webFarm.Warmup)
+   {
+      Information($"Warmup: {item}");
+   }
+   Information($"----------------------------------------------------------");
 });
 
 
@@ -137,6 +146,7 @@ Task("Resolve-Dependencies")
    var package= deployPackages.First().GetFilename();
    deployPackagePath = deployPackages.First().FullPath;
    Information($"Package found: {packageName}.");
+
 });
 
 Task("Resolve-Farm")
@@ -144,22 +154,16 @@ Task("Resolve-Farm")
    {
       // Identify the Online Host
       // Identify the Offline Host
-      var blueIsOnline = false;
-      var greenIsOnline = false;
       var blue  = System.IO.File.ReadAllText(webFarm.BlueHost.HealthCheckFilePath);
       var green = System.IO.File.ReadAllText(webFarm.GreenHost.HealthCheckFilePath);
 
-      var blueIsUP =  UP.Equals(blue.Trim().ToUpper());
+      var blueIsUP =  webFarm.UpHealthCheckValue.Equals(blue.Trim().ToUpper());
 
       if(blueIsUP)
       {
-         blueIsOnline  = blueIsUP;
-         greenIsOnline = !blueIsUP;
          onlineHost = webFarm.BlueHost;
          offlineHost = webFarm.GreenHost;
       }else{
-         blueIsOnline  = !blueIsUP;
-         greenIsOnline = blueIsUP;
          onlineHost = webFarm.GreenHost;
          offlineHost = webFarm.BlueHost;
       }
@@ -171,6 +175,11 @@ Task("Resolve-Farm")
 Task("Backup-FarmHost")
     .Does((context) => 
 {
+   if(! webFarm.ExecuteBackupStep)
+   {
+      Information("Bypassing {onlineHost.ApplicationPath} backup.");
+      return;
+   }
    // Create Backup from Online Host.
    // Versioning
    var now = DateTime.UtcNow;
@@ -197,8 +206,6 @@ Task("Install-Package")
 
 
 });
-
-
 
 Task("Invoke-FarmSite")
     .Does((ICakeContext context) => 
@@ -244,13 +251,13 @@ Task("Switch-FarmSite")
    if(offlineResponse.StatusCode == HttpStatusCode.OK)
    {
       Information($"Bringing up {offlineHost.ApplicationPath}");
-      var bringOnline = System.IO.File.ReadAllText(offlineHost.HealthCheckFilePath).Replace(DOWN,UP);
+      var bringOnline = System.IO.File.ReadAllText(offlineHost.HealthCheckFilePath).Replace(webFarm.DownHealthCheckValue,webFarm.UpHealthCheckValue);
       System.IO.File.WriteAllText(offlineHost.HealthCheckFilePath,bringOnline);
 
       Thread.Sleep(5000);
       
       Information($"Bringing down {onlineHost.ApplicationPath}");
-      var bringOffline = System.IO.File.ReadAllText(onlineHost.HealthCheckFilePath).Replace(UP,DOWN);
+      var bringOffline = System.IO.File.ReadAllText(onlineHost.HealthCheckFilePath).Replace(webFarm.UpHealthCheckValue,webFarm.DownHealthCheckValue);
       System.IO.File.WriteAllText(onlineHost.HealthCheckFilePath,bringOffline);
 
    }else{
@@ -261,17 +268,64 @@ Task("Switch-FarmSite")
 
 });
 ///////////////////////////////////////////////////////////////////////////////
+Task("Help")
+.Does(
+   (context) => {
+      Information("HELP");
+      Information("-------------------------------------------------------------");
+      Information("./build.ps1 --target='WORKFLOW' --configurationFile='CONFIGURATION_JSON_PATH'");
+      Information("-------------------------------------------------------------");
+      Information("ARGUMENTS:");
+      Information("--configurationFile='CONFIGURATION_JSON_PATH' : add configuration json file. Absolute path to the file.");
+      Information("--target='WORKFLOW': Workflow to be executed. Available Worflows below.");
+      Information("-------------------------------------------------------------");
+      Information("WORKFLOWS:");
+      Information("* Deploy-Package");
+      Information("* Rollback-Package");
+      Information("* Resolve-Environment");
+      Information("* Help");
+   }
+);
+
 Task("Default")
-.IsDependentOn("Import-Configuration")
-.IsDependentOn("Resolve-Dependencies")
-.IsDependentOn("Resolve-Farm")
-.IsDependentOn("Backup-FarmHost")
-.IsDependentOn("Install-Package")
-.IsDependentOn("Invoke-FarmSite")
-.IsDependentOn("Switch-FarmSite")
+.IsDependentOn("Help")
 .Does(() => {
-   Information("Hello Cake!");
+   Information("Hello!");
+   Information("To prevent accidents, Default behaviour of the script is to do NOTHING AT ALL!");
 });
+
+// DEPLOY WORKFLOW
+Task("Deploy-Package")
+   .IsDependentOn("Import-Configuration")
+   .IsDependentOn("Resolve-Dependencies")
+   .IsDependentOn("Resolve-Farm")
+   .IsDependentOn("Backup-FarmHost")
+   .IsDependentOn("Install-Package")
+   .IsDependentOn("Invoke-FarmSite")
+   .IsDependentOn("Switch-FarmSite")
+   .Does(() => {
+      Information("Deploy Succeeded!");
+   });
+
+// ROLLBACK WORKFLOW
+Task("Rollback-Package")
+   .IsDependentOn("Import-Configuration")
+   .IsDependentOn("Resolve-Dependencies")
+   .IsDependentOn("Resolve-Farm")
+   .IsDependentOn("Invoke-FarmSite")
+   .IsDependentOn("Switch-FarmSite")
+   .Does(() => {
+      Information("Rollback Succeeded!");
+   });  
+
+// RESOLVE ENVIRONMENT WORKFLOW
+Task("Resolve-Environment")
+   .IsDependentOn("Import-Configuration")
+   .IsDependentOn("Resolve-Dependencies")
+   .IsDependentOn("Resolve-Farm")
+   .Does(() => {
+      Information("Action Succeeded!");
+   });
 
 RunTarget(target);
 
@@ -303,6 +357,8 @@ public sealed class WebFarm
    public int MinWarmTimeoutMs { get; set; }
    public string UpHealthCheckValue { get; set; }
    public string DownHealthCheckValue { get; set; }
+
+   public bool ExecuteBackupStep { get; set; }
    public WebFarmHost BlueHost { get; set; }
    public WebFarmHost GreenHost { get; set; }
    public string[] Warmup{get; set;}

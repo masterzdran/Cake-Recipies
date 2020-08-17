@@ -4,9 +4,10 @@
     "DeployFolderPath":"",
     "DeployPackageName":"",
     "ServerFarmName":"",
-    "MinWarmTimeoutMs":"500",
+    "MinWarmTimeoutMs":"1000",
     "UpHealthCheckValue":"UP",
     "DownHealthCheckValue":"DOWN",
+    "ExecuteBackupStep":"false",
     "BlueHost":{
         "Site":"http://localhost:9081",
         "ApplicationPath":"",
